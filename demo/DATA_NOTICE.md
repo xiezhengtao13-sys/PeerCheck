@@ -1,7 +1,8 @@
 # Demonstration data
 
-Only this selected 28-frame interval is included. The full image collection,
-remaining annotations, and all trained checkpoints are private. The demonstration
+Only this selected 28-frame interval is included. The full image collection and
+the remaining annotations are private; the models of the paper's main run are
+released in `weights/`. The demonstration
 images and labels are research examples; the source-code MIT license does not
 grant a blanket license to the underlying dataset. Contact the corresponding
 author for dataset access or redistribution permission.

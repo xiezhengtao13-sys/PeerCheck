@@ -1,0 +1,26 @@
+{
+  "setting": "uniform_rho5_r0",
+  "dino_steps": 2000,
+  "sam_steps": 1000,
+  "keyframes": 33,
+  "sam_official_source": "facebook/sam3",
+  "sam_commit": "46957e47805eaa273f4aa7bbbd25a88bca9108ce",
+  "dino_encoder": "facebook/dinov2-large",
+  "dino_revision": "47b73eefe95e8d44ec3623f8890bd894b6ea2d6c",
+  "dino_original_checkpoint_sha256": "b4ba712dd7569bdc41c7d4c68024d2ad2ee52b614b2c417054b808f9294551ec",
+  "sam_original_checkpoint_sha256": "99b0f3f05e380e832396f611c22f04859578a4bcc87a930641e55de060a61d81",
+  "files": {
+    "dino_decoder.safetensors": {
+      "bytes": 8233280,
+      "sha256": "638108683986703222c3ac64f72106cb242b4ba610aa0dcd052c39e84224e6eb"
+    },
+    "index.json": {
+      "bytes": 32226,
+      "sha256": "2151b9682c3444bbe767acac46578b32c18290764899a768ab9f3b06005b9bdb"
+    },
+    "sam3_trainable-00001-of-00001.safetensors": {
+      "bytes": 47006104,
+      "sha256": "94679b03a4e088b6cba75758cb85747c11f60772f661ce95105a3cf28c50bb84"
+    }
+  }
+}

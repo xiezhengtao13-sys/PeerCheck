@@ -10,11 +10,12 @@ def main():
     parser.add_argument('--work',type=Path,required=True,help='Private scratch directory for features and trained checkpoints')
     parser.add_argument('--sam-checkpoint',type=Path,required=True,help='Authorized official pretrained SAM 3 checkpoint')
     parser.add_argument('--sam-mode',choices=['finetune','pretrained'],default='finetune')
+    parser.add_argument('--release',help='Use released paper models (e.g. uniform_rho5_r0) instead of training')
     parser.add_argument('--config',type=Path,default=Path(__file__).resolve().parents[1]/'configs/paper.yaml')
     parser.add_argument('--seed',type=int,default=0)
     args = parser.parse_args()
     from peercheck.pipeline import run
-    print(run(args.input,args.output,args.work,args.config,args.sam_checkpoint,args.sam_mode,args.seed))
+    print(run(args.input,args.output,args.work,args.config,args.sam_checkpoint,args.sam_mode,args.seed,args.release))
 
 
 if __name__=='__main__':

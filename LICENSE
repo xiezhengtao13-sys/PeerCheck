@@ -20,6 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-Scope: this grant covers the original PeerCheck code only. Third-party software,
-upstream patch context, pretrained models, and demonstration data are excluded;
-see THIRD_PARTY_NOTICES.md and demo/DATA_NOTICE.md.
+Scope: this grant covers the original PeerCheck code and the released DINOv2
+decoder weights. Third-party software, upstream patch context, the released SAM 3
+parameters (SAM License, weights/SAM_LICENSE), and demonstration data are
+excluded; see THIRD_PARTY_NOTICES.md and demo/DATA_NOTICE.md.

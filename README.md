@@ -79,6 +79,32 @@ In the clean environment it ran in **4.14 seconds**. Relative to native paper
 metrics, maximum absolute differences were **0.000548 in agreement** and
 **0.001208 in intersection foreground IoU**; no accept/review decision changed.
 
+## Released models
+
+`weights/` holds the two models of the paper's main run (5% temporal uniform
+keyframes, first run; setting `uniform_rho5_r0`, 33 keyframes):
+
+| File | Contents | License |
+|---|---|---|
+| `dino_decoder.safetensors` (8 MB) | DINOv2 decoder, 2,056,197 parameters | MIT, `weights/DECODER_LICENSE` |
+| `sam3_trainable-00001-of-00001.safetensors` (47 MB) | the 11,742,338 SAM 3 tracker parameters trained in the paper | SAM License, `weights/SAM_LICENSE` |
+
+The SAM 3 file leaves out the frozen image backbone, point embeddings and buffers.
+These come from the official checkpoint, so access to the official SAM 3 weights
+is still required. `peercheck/release.py` checks every file against
+`manifest.json` and loads both models. To run the paper's models without any
+training:
+
+```bash
+python demo/full_demo.py --sam-checkpoint ../models/sam3.pt --release uniform_rho5_r0 --output release_demo_output --work release_demo_work
+python scripts/run_peercheck.py --input my_data --sam-checkpoint ../models/sam3.pt --release uniform_rho5_r0 --output output --work private_work
+```
+
+On the demo clip, SAM 3 propagates from the clip's two keyframes, so its masks
+differ somewhat from the paper's predictions, which used all keyframes of the
+sequence. The models were trained on the paper's footbridge; for other structures,
+train new models from your own keyframes as described below.
+
 ## Full GPU demo
 
 ```bash
@@ -93,7 +119,8 @@ reproduce the paper's models, whose predictions the quick demo replays. Evaluati
 GT is opened only after the predictions are complete. On an RTX 5090 the run took
 about 6 min (14.5 s for SAM 3 and 340 s for the DINOv2 decoder) with a peak of
 8.0 GiB of allocated GPU memory; allow at least 16 GB. Trained weights and
-temporary features stay in the work directory.
+temporary features stay in the work directory. Add `--release uniform_rho5_r0` to
+use the released paper models instead.
 
 ## Run on your own sequences
 
@@ -172,8 +199,8 @@ to annotate a frame and 7 s to check one are means measured on the paper's datas
 
 Paper comparisons used native 5280 by 3956 masks. The public demo is at one-quarter
 linear resolution. Full dataset reproduction requires the private 659-frame
-collection; it can be requested from the corresponding author. No fine-tuned SAM
-or decoder weights are released because they were trained on that private data.
+collection; it can be requested from the corresponding author. The models of the
+paper's main run are released in `weights/`; the training images are not.
 The optional YOLO comparator of the paper is documented in `baselines/yolo/`.
 
 ## Optional numeric results
@@ -199,4 +226,6 @@ the release audit verifies numerical agreement with the source table.
 
 Original PeerCheck code is MIT licensed. See `LICENSE`, `THIRD_PARTY_NOTICES.md`
 and `demo/DATA_NOTICE.md` for the distinct third-party and data terms. The release
-does not include SAM 3 source code or any pretrained/fine-tuned weights.
+does not include SAM 3 source code or the official SAM 3 checkpoint. The released
+SAM 3 parameters in `weights/` are subject to the SAM License; the released decoder
+is MIT licensed.

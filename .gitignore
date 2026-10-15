@@ -17,3 +17,6 @@ full_demo_work/
 private_work/
 output/
 .DS_Store
+
+# released model weights are tracked
+!weights/**/*.safetensors

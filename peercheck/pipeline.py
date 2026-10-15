@@ -9,7 +9,8 @@ from .io import discover, read_mask, save_mask, overlay
 from .verification import agreement, intersection_labels, route
 
 
-def run(data, output, work, config_path, sam_checkpoint, sam_mode='finetune', seed=0):
+def run(data, output, work, config_path, sam_checkpoint, sam_mode='finetune', seed=0, release=None):
+    """With `release`, load the paper's released models and skip both trainings."""
     import torch
     from . import sam3_propagation as sam
     from . import dino_decoder as dino
@@ -30,7 +31,11 @@ def run(data, output, work, config_path, sam_checkpoint, sam_mode='finetune', se
     torch.cuda.reset_peak_memory_stats()
     started = time.perf_counter()
     tracker = sam.build_tracker(sam_checkpoint)
-    if sam_mode == 'finetune':
+    if release:
+        from .release import load_sam, verify
+        verify(release)
+        load_sam(tracker, release)
+    elif sam_mode == 'finetune':
         sam.fine_tune(tracker,frames,config['sam'],work/'sam_tracker_last.pt',seed)
     sam.propagate(tracker,frames,config['sam'],work/'sam_frames',output/'V3')
     sam_seconds = time.perf_counter()-started
@@ -39,7 +44,11 @@ def run(data, output, work, config_path, sam_checkpoint, sam_mode='finetune', se
     torch.cuda.empty_cache()
     dino_start = time.perf_counter()
     dino.extract_features(frames,config['dino'],work/'dino_cache')
-    head = dino.train_decoder(frames,config['dino'],work/'dino_cache',work/'dino_last.pt',seed)
+    if release:
+        from .release import load_decoder
+        head = load_decoder(release)
+    else:
+        head = dino.train_decoder(frames,config['dino'],work/'dino_cache',work/'dino_last.pt',seed)
     dino.infer(frames,head,work/'dino_cache',output/'VD')
     dino_seconds = time.perf_counter()-dino_start
     records = []
@@ -58,7 +67,7 @@ def run(data, output, work, config_path, sam_checkpoint, sam_mode='finetune', se
     table.to_csv(output/'decisions.csv',index=False)
     for status in ['accept','review']:
         table[table.status==status].to_csv(output/f'{status}.csv',index=False)
-    timing = {'sam_mode':sam_mode,'sam_seconds':sam_seconds,'dino_seconds':dino_seconds,
+    timing = {'sam_mode':f'release {release}' if release else sam_mode,'sam_seconds':sam_seconds,'dino_seconds':dino_seconds,
               'total_seconds':time.perf_counter()-started,'peak_allocated_bytes':torch.cuda.max_memory_allocated(),
               'peak_reserved_bytes':torch.cuda.max_memory_reserved(),'gpu':torch.cuda.get_device_name(0),
               'dino_steps':config['dino']['steps'],'seed':seed,'input_frames':len(frames),
