@@ -1,0 +1,14 @@
+{
+  "sam_mode": "pretrained",
+  "sam_seconds": 14.475734800100327,
+  "dino_seconds": 340.2438803999685,
+  "total_seconds": 357.8670685000252,
+  "peak_allocated_bytes": 8579821056,
+  "peak_reserved_bytes": 11733565440,
+  "gpu": "NVIDIA GeForce RTX 5090",
+  "dino_steps": 2000,
+  "seed": 0,
+  "input_frames": 28,
+  "keyframes": 2,
+  "dense_GT_used_for_training": false
+}

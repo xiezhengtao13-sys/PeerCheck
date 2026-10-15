@@ -1,0 +1,134 @@
+version: '6.1'
+seed: 0
+runs:
+- 0
+- 1
+- 2
+ratios_percent:
+- 1
+- 2
+- 3
+- 5
+- 7.5
+- 10
+- 15
+- 20
+strategies:
+- uniform
+- coverage-aware
+labels:
+  0: background
+  1: girder_and_railing
+  2: deck_slab
+  3: pier
+  4: inter_girder_region
+keyframes:
+  appearance_input_wh:
+  - 518
+  - 518
+  quota: nested proportional deficit
+  temporal_distance: absolute frame-index difference
+  appearance_distance: one minus normalized CLS dot product
+sam:
+  image_size: 1008
+  num_maskmem: 7
+  max_cond_frames_in_attn: 4
+  memory_selection: true
+  keep_first_cond_frame: false
+  working_frame_long_side: 1600
+  optimizer_steps: 1000
+  clip_frames: 8
+  max_num_objects: 4
+  learning_rate: 5.0e-06
+  final_lr_fraction: 0.1
+  weight_decay: 0.1
+  gradient_clip_norm: 0.1
+  amp_dtype: bfloat16
+  image_backbone_frozen: true
+  teacher_force_object_presence_in_training: true
+  image_augmentation: none
+  feature_cache: unprojected_frozen_backbone_only
+  sampling: uniform_sequence_then_uniform_contiguous_sparse_keyframe_clip
+  conditions: first_clip_frame_plus_random_additional_frame_when_condition_count_is_two
+  loss_mask: 20.0
+  loss_dice: 1.0
+  loss_iou: 1.0
+  loss_class: 1.0
+  focal_alpha: 0.25
+  focal_gamma: 2.0
+dino:
+  model: facebook/dinov2-large
+  revision: 47b73eefe95e8d44ec3623f8890bd894b6ea2d6c
+  frozen_backbone: true
+  input_wh:
+  - 1344
+  - 1008
+  feature_chw:
+  - 1024
+  - 72
+  - 96
+  cache_dtype: float16
+  decoder_channels:
+  - 256
+  - 256
+  - 256
+  - 256
+  output_wh:
+  - 768
+  - 576
+  batch: 4
+  steps: 2000
+  warmup_steps: 100
+  lr: 0.001
+  optimizer: AdamW
+  weight_decay: 0.01
+  adam_betas:
+  - 0.9
+  - 0.999
+  augmentation: none
+  loss: weighted CE + unweighted 5-class soft Dice; equal coefficient 1 each
+  ce_weights: inverse sqrt native pixel frequency in own keyframes; count floor 1
+    pixel; normalize mean 1
+  dice_smooth: 1.0
+  align_corners: false
+  head_seed: run
+  encoder_compute_dtype: float32; SDPA attention
+  decoder_training_dtype: float32 with bfloat16 autocast
+  last_checkpoint_only: true
+  ce_coefficient: 1.0
+  dice_coefficient: 1.0
+verification:
+  tau: 0.85
+  q: 0.85
+  a_min: 0.0005
+  ignore: 255
+effort:
+  t_ann: 157.0
+  t_rev: 7.0
+yolo:
+  weights: models/yolo26m-seg.pt
+  official_url: https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo26m-seg.pt
+  imgsz: 1280
+  batch: 6
+  optimizer_steps: 1000
+  optimizer: AdamW
+  lr0: 0.001
+  final_lr_fraction: 0.01
+  warmup_steps: 100
+  weight_decay: 0.0005
+  conf: 0.25
+  retina_masks: true
+  augmentation:
+    degrees: 8
+    translate: 0.12
+    scale: 0.4
+    shear: 2
+    fliplr: 0.5
+    flipud: 0.0
+    mosaic: 0.7
+    close_mosaic: 0
+    hsv_h: 0.01
+    hsv_s: 0.4
+    hsv_v: 0.3
+    mixup: 0.0
+    copy_paste: 0.0

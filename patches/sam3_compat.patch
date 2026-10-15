@@ -1,0 +1,121 @@
+diff --git a/sam3/model/sam3_image.py b/sam3/model/sam3_image.py
+index f1f63cf..bdbb43a 100644
+--- a/sam3/model/sam3_image.py
++++ b/sam3/model/sam3_image.py
+@@ -4,12 +4,11 @@
+ 
+ import os
+ from copy import deepcopy
+-from typing import Dict, List, Optional, Tuple
++from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+ 
+ import numpy as np
+ import torch
+ from sam3.model.model_misc import SAM3Output
+-from sam3.model.sam1_task_predictor import SAM3InteractiveImagePredictor
+ from sam3.model.vl_combiner import SAM3VLBackbone
+ from sam3.perflib.nms import nms_masks
+ from sam3.train.data.collator import BatchedDatapoint
+@@ -20,6 +19,9 @@ from .data_misc import FindStage
+ from .geometry_encoders import Prompt
+ from .model_misc import inverse_sigmoid
+ 
++if TYPE_CHECKING:
++    from sam3.model.sam1_task_predictor import SAM3InteractiveImagePredictor
++
+ 
+ def _update_out(out, out_name, out_value, auxiliary=True, update_aux=True):
+     out[out_name] = out_value[-1] if auxiliary else out_value
+@@ -55,7 +57,7 @@ class Sam3Image(torch.nn.Module):
+         detach_presence_in_joint_score: bool = False,  # only relevant if using presence token/score
+         separate_scorer_for_instance: bool = False,
+         num_interactive_steps_val: int = 0,
+-        inst_interactive_predictor: SAM3InteractiveImagePredictor = None,
++        inst_interactive_predictor: "SAM3InteractiveImagePredictor" = None,
+         **kwargs,
+     ):
+         super().__init__()
+diff --git a/sam3/model/sam3_tracker_utils.py b/sam3/model/sam3_tracker_utils.py
+index 74e9e12..0a0c593 100644
+--- a/sam3/model/sam3_tracker_utils.py
++++ b/sam3/model/sam3_tracker_utils.py
+@@ -6,7 +6,16 @@ import numpy as np
+ import torch
+ import torch.nn.functional as F
+ from numpy.typing import NDArray
+-from sam3.model.edt import edt_triton
++try:
++    from sam3.model.edt import edt_triton
++except (ImportError, OSError):
++    # Image/video inference can run with hole filling disabled. On managed
++    # Windows hosts, Application Control may block the optional Triton DLL at
++    # import time even though the rest of the tracker is usable.
++    def edt_triton(data: torch.Tensor):
++        raise RuntimeError(
++            "Triton EDT is unavailable; set fill_hole_area=0 for inference"
++        )
+ 
+ 
+ def sample_box_points(
+diff --git a/sam3/model_builder.py b/sam3/model_builder.py
+index a5dea87..147e0c1 100644
+--- a/sam3/model_builder.py
++++ b/sam3/model_builder.py
+@@ -37,18 +37,30 @@ from sam3.model.model_misc import (
+ from sam3.model.multiplex_utils import MultiplexController
+ from sam3.model.necks import Sam3DualViTDetNeck, Sam3TriViTDetNeck
+ from sam3.model.position_encoding import PositionEmbeddingSine
+-from sam3.model.sam1_task_predictor import SAM3InteractiveImagePredictor
+ from sam3.model.sam3_image import Sam3Image, Sam3ImageOnVideoMultiGPU
+-from sam3.model.sam3_tracking_predictor import Sam3TrackerPredictor
+-from sam3.model.sam3_video_inference import Sam3VideoInferenceWithInstanceInteractivity
+-from sam3.model.sam3_video_predictor import Sam3VideoPredictorMultiGPU
+ from sam3.model.text_encoder_ve import VETextEncoder
+ from sam3.model.tokenizer_ve import SimpleTokenizer
+-from sam3.model.video_tracking_multiplex import VideoTrackingDynamicMultiplex
+ from sam3.model.vitdet import ViT
+ from sam3.model.vl_combiner import SAM3VLBackbone, SAM3VLBackboneTri, TriHeadVisionOnly
+ from sam3.sam.transformer import RoPEAttention
+ 
++# The image-only concept-segmentation path does not need the tracker stack.
++# Importing it eagerly also imports Triton, whose DLL can be blocked by Windows
++# application-control policies. Keep tracker imports optional so image inference
++# remains usable; video/interactive builders fail explicitly if requested.
++try:
++    from sam3.model.sam1_task_predictor import SAM3InteractiveImagePredictor
++    from sam3.model.sam3_tracking_predictor import Sam3TrackerPredictor
++    from sam3.model.sam3_video_inference import Sam3VideoInferenceWithInstanceInteractivity
++    from sam3.model.sam3_video_predictor import Sam3VideoPredictorMultiGPU
++    from sam3.model.video_tracking_multiplex import VideoTrackingDynamicMultiplex
++except (ImportError, OSError):
++    SAM3InteractiveImagePredictor = None
++    Sam3TrackerPredictor = None
++    Sam3VideoInferenceWithInstanceInteractivity = None
++    Sam3VideoPredictorMultiGPU = None
++    VideoTrackingDynamicMultiplex = None
++
+ 
+ # Setup TensorFloat-32 for Ampere GPUs if available
+ def _setup_tf32() -> None:
+diff --git a/sam3/perflib/nms.py b/sam3/perflib/nms.py
+index acd9162..a330f48 100644
+--- a/sam3/perflib/nms.py
++++ b/sam3/perflib/nms.py
+@@ -65,9 +65,14 @@ def generic_nms(
+         if GENERIC_NMS_AVAILABLE:
+             return generic_nms_cuda(ious, scores, iou_threshold, use_iou_matrix=True)
+         else:
+-            from sam3.perflib.triton.nms import nms_triton
+-
+-            return nms_triton(ious, scores, iou_threshold)
++            try:
++                from sam3.perflib.triton.nms import nms_triton
++
++                return nms_triton(ious, scores, iou_threshold)
++            except (ImportError, OSError):
++                # The IoU matrix is small; moving only this matrix to the CPU
++                # is a safe compatibility fallback when Triton is unavailable.
++                return generic_nms_cpu(ious, scores, iou_threshold)
+ 
+     return generic_nms_cpu(ious, scores, iou_threshold)
+ 

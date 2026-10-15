@@ -1,0 +1,7 @@
+class_id,name,red,green,blue
+0,environment,45,45,45
+1,girder_and_handrail,0,180,230
+2,deck,255,195,0
+3,pier,225,70,65
+4,inter_girder_region,155,85,220
+255,ignore,245,245,245
