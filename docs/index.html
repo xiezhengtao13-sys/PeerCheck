@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PeerCheck demo</title>
+<meta name="description" content="Interactive demonstration of PeerCheck: two segmentation models verify each other on a UAV bridge image sequence, and only frames where they disagree go to a person.">
+<style>
+:root {
+  --bg: #f6f6f3; --surface: #ffffff; --ink: #1c1c1e; --ink-2: #48484d; --muted: #737378;
+  --line: #e2e2de; --grid: #ececea; --focus: #0072b2;
+  --accept: #0072b2; --review: #c45200; --key: #00845f;
+  --band: #f6e0d0; --series-c: #55555a; --series-iou: #0072b2; --tau: #d55e00; --q: #9a9aa0;
+  --chip: #f0f0ec; --chip-on: #1c1c1e; --chip-on-ink: #ffffff;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111113; --surface: #1b1b1e; --ink: #ececef; --ink-2: #bdbdc4; --muted: #8d8d95;
+    --line: #2d2d32; --grid: #26262b; --focus: #56b4e9;
+    --accept: #56b4e9; --review: #f08a3c; --key: #2fbf8f;
+    --band: #3b281c; --series-c: #b4b4bb; --series-iou: #56b4e9; --tau: #f08a3c; --q: #77777f;
+    --chip: #26262b; --chip-on: #ececef; --chip-on-ink: #111113;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111113; --surface: #1b1b1e; --ink: #ececef; --ink-2: #bdbdc4; --muted: #8d8d95;
+  --line: #2d2d32; --grid: #26262b; --focus: #56b4e9;
+  --accept: #56b4e9; --review: #f08a3c; --key: #2fbf8f;
+  --band: #3b281c; --series-c: #b4b4bb; --series-iou: #56b4e9; --tau: #f08a3c; --q: #77777f;
+  --chip: #26262b; --chip-on: #ececef; --chip-on-ink: #111113;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+a { color: var(--accept); }
+header, main, footer { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
+header { padding-top: 28px; padding-bottom: 8px; }
+h1 { font-size: 26px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -0.01em; }
+.lead { margin: 0; color: var(--ink-2); max-width: 760px; }
+.links { margin: 10px 0 0; display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 18px; margin-top: 18px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.viewer { padding: 12px; }
+.bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip {
+  border: 1px solid var(--line); background: var(--chip); color: var(--ink); border-radius: 999px;
+  padding: 5px 12px; font: inherit; font-size: 13.5px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-ink); border-color: var(--chip-on); }
+.chip:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.canvas-wrap { position: relative; margin-top: 10px; border-radius: 6px; overflow: hidden; background: #000; }
+canvas { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 14px; background: rgba(0,0,0,.45); }
+.loading[hidden] { display: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 13px; color: var(--ink-2); }
+.swatch { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.frame-bar { margin-top: 10px; display: grid; grid-template-columns: auto auto minmax(0,1fr) auto auto; gap: 8px; align-items: center; }
+.icon-btn {
+  border: 1px solid var(--line); background: var(--chip); color: var(--ink); border-radius: 8px;
+  width: 34px; height: 30px; font-size: 15px; cursor: pointer; line-height: 1;
+}
+#prev, #next { font-size: 22px; padding-bottom: 3px; }
+input[type="range"] { width: 100%; accent-color: var(--accept); }
+.frame-label { font-variant-numeric: tabular-nums; font-size: 13.5px; color: var(--ink-2); min-width: 92px; text-align: right; }
+.panel { display: flex; flex-direction: column; gap: 14px; }
+.badge { display: inline-block; font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 999px; color: #fff; }
+.badge.accept { background: var(--accept); }
+.badge.review { background: var(--review); }
+.badge.keyframe { background: var(--key); }
+:root[data-theme="dark"] .badge, .dark-badge .badge { color: #111113; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .badge { color: #111113; } }
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 10px 0 0; font-size: 14px; }
+.kv dt { color: var(--ink-2); }
+.kv dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
+.panel h2, .timeline h2, .notes h2 { font-size: 15px; margin: 0 0 4px; }
+.hint { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+.tau-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; align-items: center; margin-top: 6px; }
+.tau-val { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 18px; min-width: 46px; text-align: right; }
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.tile .label { font-size: 12.5px; color: var(--ink-2); }
+.tile .value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.25; }
+.tile .sub { font-size: 12px; color: var(--muted); }
+.tile.wide { grid-column: span 2; }
+.timeline { grid-column: 1 / -1; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--ink-2); margin: 4px 0 6px; }
+.chart-legend svg { vertical-align: -2px; margin-right: 5px; }
+.chart-wrap { position: relative; }
+#chart { width: 100%; height: auto; display: block; }
+#chart text { fill: var(--ink-2); font-size: 12px; font-family: inherit; }
+.tooltip {
+  position: absolute; pointer-events: none; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 12.5px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.12); white-space: nowrap; transform: translate(-50%, -110%);
+}
+.tooltip[hidden] { display: none; }
+.notes { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 18px; }
+.notes p { margin: 0; font-size: 14px; color: var(--ink-2); }
+details { grid-column: 1 / -1; }
+summary { cursor: pointer; font-size: 14px; color: var(--ink-2); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 8px; font-variant-numeric: tabular-nums; }
+th, td { border-bottom: 1px solid var(--line); padding: 4px 8px; text-align: right; }
+th:first-child, td:first-child, th:last-child, td:last-child { text-align: left; }
+footer { color: var(--muted); font-size: 13px; padding-top: 22px; padding-bottom: 32px; }
+@media (max-width: 900px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .notes { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .chart-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  #chart { min-width: 600px; }
+  h1 { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>PeerCheck: interactive demo</h1>
+  <p class="lead">Two models label a UAV image sequence of a footbridge from a few annotated keyframes: SAM&nbsp;3 propagates the keyframe masks along the sequence, and a light decoder on frozen DINOv2 features segments each frame on its own. Where their labels agree, the frame is accepted with the consensus label; where they disagree, it goes to a person.</p>
+  <p class="links"><a href="https://github.com/xiezhengtao13-sys/PeerCheck">Code and models on GitHub</a><span>Paper: PeerCheck: Label-Efficient Segmentation of UAV Bridge Image Sequences by Mutual Model Verification</span></p>
+</header>
+
+<main class="layout">
+  <section class="card viewer" aria-label="Frame viewer">
+    <div class="bar" role="group" aria-label="Layer">
+      <button class="chip" data-layer="photo" aria-pressed="false">Photo</button>
+      <button class="chip" data-layer="sam" aria-pressed="false">SAM 3</button>
+      <button class="chip" data-layer="dino" aria-pressed="false">DINOv2 decoder</button>
+      <button class="chip" data-layer="consensus" aria-pressed="true">Consensus label</button>
+      <button class="chip" data-layer="gt" aria-pressed="false">Ground truth</button>
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="view" width="880" height="660" role="img" aria-label="Frame image with labels"></canvas>
+      <div class="loading" id="loading">Loading frames…</div>
+    </div>
+    <div class="legend" aria-label="Label colors">
+      <span><span class="swatch" style="background:#0072b2"></span>Girder and railing</span>
+      <span><span class="swatch" style="background:#e69f00"></span>Deck slab</span>
+      <span><span class="swatch" style="background:#009e73"></span>Pier</span>
+      <span><span class="swatch" style="background:#cc79a7"></span>Inter-girder region</span>
+      <span><span class="swatch" style="background:#ff00ff"></span>Ignore (models disagree)</span>
+    </div>
+    <div class="frame-bar">
+      <button class="icon-btn" id="prev" aria-label="Previous frame">&lsaquo;</button>
+      <button class="icon-btn" id="play" aria-label="Play">&#9654;</button>
+      <input type="range" id="frame" min="0" max="27" value="0" aria-label="Frame">
+      <button class="icon-btn" id="next" aria-label="Next frame">&rsaquo;</button>
+      <span class="frame-label" id="frameLabel">Frame 141</span>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <div class="card" aria-live="polite">
+      <h2 id="frameTitle">Frame 141</h2>
+      <span class="badge keyframe" id="badge">Keyframe</span>
+      <dl class="kv">
+        <dt>Agreement C<sub>i</sub> of the two models</dt><dd id="vC">–</dd>
+        <dt>Consensus IoU with ground truth</dt><dd id="vIoU">–</dd>
+        <dt>SAM 3 IoU</dt><dd id="vSam">–</dd>
+        <dt>DINOv2 decoder IoU</dt><dd id="vDino">–</dd>
+      </dl>
+      <p class="hint" id="frameHint"></p>
+    </div>
+    <div class="card">
+      <h2><label for="tau">Agreement threshold τ</label></h2>
+      <div class="tau-row">
+        <input type="range" id="tau" min="0.5" max="0.99" step="0.01" value="0.85">
+        <span class="tau-val" id="tauVal">0.85</span>
+      </div>
+      <p class="hint">Frames with C<sub>i</sub> ≥ τ are accepted without a check. The paper uses τ = 0.85 for every setting. A label is adequate when its IoU with the ground truth reaches q = 0.85.</p>
+    </div>
+    <div class="tiles">
+      <div class="tile"><div class="label">Accepted automatically</div><div class="value" id="tAcc">–</div><div class="sub" id="tAccSub"></div></div>
+      <div class="tile"><div class="label">Sent to review</div><div class="value" id="tRev">–</div><div class="sub" id="tRevSub"></div></div>
+      <div class="tile"><div class="label">Accepted but below q</div><div class="value" id="tBad">–</div><div class="sub">inadequate labels passed on</div></div>
+      <div class="tile"><div class="label">Mean IoU, all frames</div><div class="value" id="tIoU">–</div><div class="sub">after review</div></div>
+      <div class="tile wide"><div class="label">Manual time for this clip</div><div class="value" id="tTime">–</div><div class="sub" id="tTimeSub"></div></div>
+    </div>
+  </aside>
+
+  <section class="card timeline" aria-label="Agreement and accuracy along the clip">
+    <h2>Agreement and accuracy along the clip</h2>
+    <div class="chart-legend">
+      <span><svg width="22" height="10"><line x1="1" y1="5" x2="21" y2="5" stroke="var(--series-c)" stroke-width="2"/><circle cx="11" cy="5" r="3" fill="var(--series-c)"/></svg>Agreement C<sub>i</sub></span>
+      <span><svg width="22" height="10"><line x1="1" y1="5" x2="21" y2="5" stroke="var(--series-iou)" stroke-width="2"/><circle cx="11" cy="5" r="3" fill="var(--series-iou)"/></svg>Consensus IoU with ground truth</span>
+      <span><svg width="22" height="10"><line x1="1" y1="5" x2="21" y2="5" stroke="var(--tau)" stroke-width="2" stroke-dasharray="4 3"/></svg>Threshold τ</span>
+      <span><svg width="22" height="10"><line x1="1" y1="5" x2="21" y2="5" stroke="var(--q)" stroke-width="1.5" stroke-dasharray="1.5 2.5"/></svg>Quality bar q</span>
+      <span><svg width="14" height="10"><rect x="1" y="0" width="12" height="10" fill="var(--band)"/></svg>Reviewed frame</span>
+      <span><svg width="10" height="10"><line x1="5" y1="0" x2="5" y2="10" stroke="var(--key)" stroke-width="2"/></svg>Keyframe</span>
+    </div>
+    <div class="chart-wrap">
+      <svg id="chart" viewBox="0 0 900 250" aria-label="Line chart of agreement and IoU per frame"></svg>
+      <div class="tooltip" id="tip" hidden></div>
+    </div>
+  </section>
+
+  <section class="notes">
+    <div><h2>What to try</h2><p>Play the clip and switch layers. Around frames 155 to 164 the pier comes into view: the SAM&nbsp;3 labels propagated from the keyframes miss it, while the DINOv2 decoder finds it. The two models disagree, C<sub>i</sub> falls, and these frames go to review; the consensus marks the disputed pixels as ignore. Lower τ to about 0.6 to see the risk: the same frames would then be accepted with inadequate labels.</p></div>
+    <div><h2>Manual time</h2><p>Annotating a frame takes 157 s and checking an automatic label 7 s, as measured in the study. A reviewed frame whose label falls below q is annotated again. This clip was chosen to show both outcomes and is harder than the dataset as a whole; over all 659 frames the effort at 5% keyframes is 18% to 23% of annotating every frame.</p></div>
+    <div><h2>About the data</h2><p>The clip is frames 141 to 168 of one image sequence, between two keyframes of the paper's main run (5% temporal uniform keyframes, first run), with predictions from that run. Images are shown at reduced resolution; scores are those of the paper at full resolution. The ground truth is used only for evaluation.</p></div>
+  </section>
+
+  <details class="card">
+    <summary>Data table</summary>
+    <table id="table"><thead><tr><th>Frame</th><th>C<sub>i</sub></th><th>Consensus IoU</th><th>SAM 3 IoU</th><th>DINOv2 IoU</th><th>Status at τ</th></tr></thead><tbody></tbody></table>
+  </details>
+</main>
+
+<footer>
+  Code: MIT license. The demonstration images and labels are research examples from the study; the full dataset is available from the corresponding author on request.
+</footer>
+
+<script src="demo/data.js"></script>
+<script>
+(() => {
+  const D = window.PEERCHECK_DATA, F = D.frames, N = F.length;
+  const W = D.size[0], H = D.size[1];
+  const COLORS = { 1: [0, 114, 178], 2: [230, 159, 0], 3: [0, 158, 115], 4: [204, 121, 167], 255: [255, 0, 255] };
+  const LAYERS = ['sam', 'dino', 'consensus', 'gt'];
+  const STATUS = { accept: 'Accepted automatically', review: 'Sent to review', keyframe: 'Keyframe (annotated)' };
+  const state = { i: 0, layer: 'consensus', tau: D.tau, timer: null };
+  const rgb = new Array(N), masks = Object.fromEntries(LAYERS.map(l => [l, new Array(N)]));
+  const $ = id => document.getElementById(id);
+  const view = $('view'), ctx = view.getContext('2d');
+  const work = document.createElement('canvas'); work.width = W; work.height = H;
+  const wctx = work.getContext('2d', { willReadFrequently: true });
+
+  const status = (f, tau) => f.keyframe ? 'keyframe' : (f.C >= tau ? 'accept' : 'review');
+  const fmt = (v, d = 3) => (v === null || v === undefined || isNaN(v)) ? '–' : v.toFixed(d);
+
+  function loadImage(src) {
+    return new Promise((resolve, reject) => {
+      const im = new Image(); im.onload = () => resolve(im); im.onerror = () => reject(new Error(src)); im.src = src;
+    });
+  }
+  function pixels(im) { wctx.clearRect(0, 0, W, H); wctx.drawImage(im, 0, 0, W, H); return wctx.getImageData(0, 0, W, H).data; }
+  async function loadFrame(k) {
+    if (rgb[k]) return;
+    const name = F[k].name;
+    const ims = await Promise.all([loadImage(`demo/rgb/${name}.jpg`), ...LAYERS.map(l => loadImage(`demo/masks/${l}/${name}.png`))]);
+    rgb[k] = pixels(ims[0]);
+    LAYERS.forEach((l, j) => {
+      const px = pixels(ims[j + 1]), m = new Uint8Array(W * H);
+      for (let p = 0; p < W * H; p++) m[p] = px[p * 4];
+      masks[l][k] = m;
+    });
+  }
+
+  function render() {
+    const k = state.i, base = rgb[k];
+    if (!base) { $('loading').hidden = false; loadFrame(k).then(render); return; }
+    $('loading').hidden = true;
+    const out = ctx.createImageData(W, H), o = out.data;
+    if (state.layer === 'photo') { o.set(base); }
+    else {
+      const m = masks[state.layer][k], a = 0.5;
+      for (let p = 0, q = 0; p < W * H; p++, q += 4) {
+        const c = m[p];
+        let r = base[q], g = base[q + 1], b = base[q + 2];
+        const col = c ? COLORS[c] : null;
+        if (col) {
+          const x = p % W;
+          const edge = (x > 0 && m[p - 1] !== c) || (x < W - 1 && m[p + 1] !== c) ||
+                       (p >= W && m[p - W] !== c) || (p < W * (H - 1) && m[p + W] !== c);
+          if (edge) { r = col[0]; g = col[1]; b = col[2]; }
+          else { r = r * (1 - a) + col[0] * a; g = g * (1 - a) + col[1] * a; b = b * (1 - a) + col[2] * a; }
+        }
+        o[q] = r; o[q + 1] = g; o[q + 2] = b; o[q + 3] = 255;
+      }
+    }
+    ctx.putImageData(out, 0, 0);
+  }
+
+  function updateFrameInfo() {
+    const f = F[state.i], s = status(f, state.tau);
+    $('frame').value = state.i;
+    $('frameLabel').textContent = `Frame ${f.index}`;
+    $('frameTitle').textContent = `Frame ${f.index}`;
+    const badge = $('badge'); badge.className = `badge ${s}`; badge.textContent = STATUS[s];
+    $('vC').textContent = fmt(f.C); $('vIoU').textContent = fmt(f.iou);
+    $('vSam').textContent = fmt(f.iou_sam); $('vDino').textContent = fmt(f.iou_dino);
+    let hint = '';
+    if (s === 'keyframe') hint = 'Annotated by hand; both models learn from it.';
+    else if (s === 'accept') hint = f.iou >= D.q ? 'Accepted, and the label is adequate.' : 'Accepted, but the label is below q: an inadequate label passes.';
+    else hint = f.iou >= D.q ? 'A person checks the label in seconds and keeps it.' : 'A person checks the label and annotates the frame again.';
+    $('frameHint').textContent = hint;
+    view.setAttribute('aria-label', `Frame ${f.index}, ${state.layer} layer, ${STATUS[s]}`);
+    drawCursor();
+  }
+
+  function updateSummary() {
+    let K = 0, A = 0, R = 0, Rf = 0, bad = 0, iouSum = 0;
+    for (const f of F) {
+      const s = status(f, state.tau);
+      if (s === 'keyframe') { K++; iouSum += 1; }
+      else if (s === 'accept') { A++; iouSum += f.iou; if (f.iou < D.q) bad++; }
+      else { R++; if (f.iou < D.q) { Rf++; iouSum += 1; } else iouSum += f.iou; }
+    }
+    const sec = (K + Rf) * D.t_ann + R * D.t_rev, full = N * D.t_ann;
+    $('tAcc').textContent = `${A}`; $('tAccSub').textContent = `of ${N - K} non-keyframes`;
+    $('tRev').textContent = `${R}`; $('tRevSub').textContent = `${Rf} annotated again`;
+    $('tBad').textContent = `${bad}`;
+    $('tIoU').textContent = (iouSum / N).toFixed(3);
+    $('tTime').textContent = `${(sec / 60).toFixed(1)} min  (${Math.round(100 * sec / full)}%)`;
+    $('tTimeSub').textContent = `${K} keyframes + ${R} checks + ${Rf} re-annotations, against ${(full / 60).toFixed(1)} min for annotating all ${N} frames`;
+    $('tauVal').textContent = state.tau.toFixed(2);
+    const rows = F.map(f => `<tr><td>${f.index}</td><td>${fmt(f.C)}</td><td>${fmt(f.iou)}</td><td>${fmt(f.iou_sam)}</td><td>${fmt(f.iou_dino)}</td><td>${STATUS[status(f, state.tau)]}</td></tr>`);
+    document.querySelector('#table tbody').innerHTML = rows.join('');
+  }
+
+  // ---- chart
+  const svg = $('chart'), NS = 'http://www.w3.org/2000/svg';
+  const M = { l: 44, r: 18, t: 14, b: 32 }, CW = 900, CH = 250, Y0 = 0.5;
+  const step = (CW - M.l - M.r) / (N - 1);
+  const X = k => M.l + k * step, Y = v => M.t + (1 - (Math.max(v, Y0) - Y0) / (1 - Y0)) * (CH - M.t - M.b);
+  const el = (tag, attrs, parent = svg) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent.appendChild(e); return e; };
+  const gBands = el('g', {}), gGrid = el('g', {}), gKeys = el('g', {}), gLines = el('g', {}), gCursor = el('g', {}), gPts = el('g', {}), gHit = el('g', {});
+  for (const v of [0.5, 0.75, 1.0]) {
+    el('line', { x1: M.l, x2: CW - M.r, y1: Y(v), y2: Y(v), stroke: 'var(--grid)', 'stroke-width': 1 }, gGrid);
+    el('text', { x: M.l - 8, y: Y(v) + 4, 'text-anchor': 'end' }, gGrid).textContent = v.toFixed(2);
+  }
+  F.forEach((f, k) => {
+    if (f.index % 5 === 0 || k === 0 || k === N - 1)
+      el('text', { x: X(k), y: CH - 10, 'text-anchor': 'middle' }, gGrid).textContent = f.index;
+  });
+  const qLine = el('line', { x1: M.l, x2: CW - M.r, y1: Y(D.q), y2: Y(D.q), stroke: 'var(--q)', 'stroke-width': 1.5, 'stroke-dasharray': '1.5 2.5' }, gGrid);
+  el('text', { x: M.l + 4, y: Y(D.q) + 14 }, gGrid).textContent = 'q';
+  const tauLine = el('line', { x1: M.l, x2: CW - M.r, stroke: 'var(--tau)', 'stroke-width': 2, 'stroke-dasharray': '6 4' }, gGrid);
+  const tauText = el('text', { x: CW - M.r - 2, 'text-anchor': 'end' }, gGrid);
+  F.forEach((f, k) => {
+    if (!f.keyframe) return;
+    el('line', { x1: X(k), x2: X(k), y1: M.t, y2: CH - M.b, stroke: 'var(--key)', 'stroke-width': 2 }, gKeys);
+  });
+  const routed = F.map((f, k) => [f, k]).filter(([f]) => !f.keyframe);
+  const poly = key => routed.map(([f, k]) => `${X(k)},${Y(f[key])}`).join(' ');
+  el('polyline', { points: poly('C'), fill: 'none', stroke: 'var(--series-c)', 'stroke-width': 2 }, gLines);
+  el('polyline', { points: poly('iou'), fill: 'none', stroke: 'var(--series-iou)', 'stroke-width': 2 }, gLines);
+  for (const [f, k] of routed) {
+    el('circle', { cx: X(k), cy: Y(f.C), r: 3.2, fill: 'var(--series-c)', stroke: 'var(--surface)', 'stroke-width': 1.5 }, gPts);
+    el('circle', { cx: X(k), cy: Y(f.iou), r: 3.2, fill: 'var(--series-iou)', stroke: 'var(--surface)', 'stroke-width': 1.5 }, gPts);
+  }
+  const cursor = el('line', { y1: M.t, y2: CH - M.b, stroke: 'var(--ink)', 'stroke-width': 1, opacity: 0.55 }, gCursor);
+  const tip = $('tip');
+  F.forEach((f, k) => {
+    const r = el('rect', { x: X(k) - step / 2, y: M.t, width: step, height: CH - M.t - M.b, fill: 'transparent', style: 'cursor:pointer' }, gHit);
+    r.addEventListener('mousemove', ev => {
+      const s = status(f, state.tau);
+      tip.innerHTML = `<b>Frame ${f.index}</b> · ${STATUS[s]}<br>C<sub>i</sub> ${fmt(f.C)} · IoU ${fmt(f.iou)}`;
+      const box = svg.getBoundingClientRect();
+      tip.style.left = `${ev.clientX - box.left}px`; tip.style.top = `${ev.clientY - box.top}px`; tip.hidden = false;
+    });
+    r.addEventListener('mouseleave', () => { tip.hidden = true; });
+    r.addEventListener('click', () => setFrame(k));
+  });
+  function drawBands() {
+    gBands.replaceChildren();
+    F.forEach((f, k) => {
+      if (status(f, state.tau) === 'review')
+        el('rect', { x: X(k) - step / 2, y: M.t, width: step, height: CH - M.t - M.b, fill: 'var(--band)' }, gBands);
+    });
+    tauLine.setAttribute('y1', Y(state.tau)); tauLine.setAttribute('y2', Y(state.tau));
+    tauText.setAttribute('y', Y(state.tau) - 6); tauText.textContent = `τ = ${state.tau.toFixed(2)}`;
+  }
+  function drawCursor() { cursor.setAttribute('x1', X(state.i)); cursor.setAttribute('x2', X(state.i)); }
+
+  // ---- controls
+  function setFrame(k) { state.i = (k + N) % N; updateFrameInfo(); render(); }
+  document.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => {
+    state.layer = b.dataset.layer;
+    document.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', String(c === b)));
+    updateFrameInfo(); render();
+  }));
+  $('frame').addEventListener('input', e => setFrame(+e.target.value));
+  $('prev').addEventListener('click', () => setFrame(state.i - 1));
+  $('next').addEventListener('click', () => setFrame(state.i + 1));
+  $('play').addEventListener('click', () => {
+    if (state.timer) { clearInterval(state.timer); state.timer = null; $('play').innerHTML = '&#9654;'; $('play').setAttribute('aria-label', 'Play'); }
+    else { state.timer = setInterval(() => setFrame(state.i + 1), 350); $('play').innerHTML = '&#10074;&#10074;'; $('play').setAttribute('aria-label', 'Pause'); }
+  });
+  $('tau').addEventListener('input', e => { state.tau = +e.target.value; updateSummary(); drawBands(); updateFrameInfo(); });
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.key === 'ArrowRight') setFrame(state.i + 1);
+    if (e.key === 'ArrowLeft') setFrame(state.i - 1);
+  });
+
+  updateSummary(); drawBands(); updateFrameInfo();
+  loadFrame(0).then(render).then(async () => { for (let k = 1; k < N; k++) await loadFrame(k); })
+    .catch(() => { $('loading').textContent = 'Could not load the frames. Open this page through a web server, not as a local file.'; });
+})();
+</script>
+</body>
+</html>

@@ -11,6 +11,5 @@ of EXIF, XMP and GPS metadata. Masks use palette-indexed PNG with labels 0-4 and
 255 (ignore), resized by nearest neighbor. Dense `gt/` is used only for evaluation;
 training and propagation can read only the two masks in `keyframes/`.
 
-`precomputed/` contains saved paper predictions from uniform 5%, run 0. It must
-not be mistaken for predictions from the separately executed two-keyframe GPU
-demo in `expected_full_demo/`.
+`precomputed/` contains the saved predictions of the paper's main run (5% temporal
+uniform keyframes, first run).

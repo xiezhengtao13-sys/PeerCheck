@@ -10,6 +10,18 @@ Two peer models learn from the same few annotated keyframes. Frames on which
 their labels agree are accepted with the consensus label; the other frames go
 to a person for review.
 
+## Online demo
+
+**[Try it in the browser](https://xiezhengtao13-sys.github.io/PeerCheck/)**: play a
+28-frame clip of the paper's footbridge, switch between the SAM 3, DINOv2 and
+consensus labels and the ground truth, and move the agreement threshold to see
+which frames are accepted, which go to review, and how much manual time the clip
+needs. The page runs entirely in the browser on the saved predictions of the
+paper; it is built from `demo/` by `scripts/build_web_demo.py` and served from
+`docs/`.
+
+[![PeerCheck online demo](docs/demo_screenshot.jpg)](https://xiezhengtao13-sys.github.io/PeerCheck/)
+
 ## Installation
 
 Python 3.12 was used. The CPU demo needs no model downloads or GPU:
@@ -52,7 +64,8 @@ through Transformers at the revision pinned in `configs/paper.yaml`; an optional
 
 ## Quick CPU demo
 
-The included interval is sequence 011, zero-based frame indices **141-168**, with
+The included interval is the paper's sequence 3 (folder `sequence_011`), zero-based
+frame indices **141-168**, with
 two endpoint keyframes. The native paper results contain **15 accept and 11 review**
 decisions among the 26 non-keyframes. The script reads only saved predictions,
 recomputes their equal-label intersection, agreement, routing and GT metrics,
@@ -72,27 +85,15 @@ metrics, maximum absolute differences were **0.000548 in agreement** and
 python demo/full_demo.py --sam-checkpoint ../models/sam3.pt --output full_demo_output --work full_demo_work
 ```
 
-This run uses **pretrained SAM 3 propagation and a freshly trained 2000-step
-DINOv2 decoder**, starting with only the two endpoint masks. It does not load the
-paper's fine-tuned checkpoints. Therefore it is a functional two-keyframe example,
-not an exact replay of the 33-keyframe, full-dataset paper setting. Evaluation GT
-is opened only after predictions are complete. Actual GPU, memory and wall time
-are in `demo/expected_full_demo/execution.json`; example outputs are included in
-that folder. Trained weights and temporary features remain in the private work
-directory and are excluded from the release.
-
-The actual run took **357.9 seconds (5.96 minutes)** on an RTX 5090: 14.5 seconds
-for SAM and 340.2 seconds for DINO feature extraction, training and inference.
-Peak PyTorch allocated memory was **7.99 GiB**, with **10.93 GiB reserved**.
-Allow at least **16 GB VRAM** for this demo; that is a practical allowance, not
-a measured minimum. Larger inputs or SAM fine-tuning need more memory. Runtime
-on other GPUs will differ; model-download time is excluded.
-
-The two-keyframe demo accepted all 26 non-keyframes, including **10 with GT IoU
-below 0.85**. This exposes the known failure mode of mutual verification: both
-models can agree while missing the same structure. These results are retained
-without threshold tuning. Use the quick demo to reproduce the paper's 15/11
-split; do not present the new full demo as the paper's accuracy result.
+This runs the whole pipeline on the demonstration clip from its two endpoint
+keyframes: SAM 3 propagation from the pretrained checkpoint, training of a new
+DINOv2 decoder (2000 steps), and mutual verification. It shows how the parts fit
+together on a GPU. With two keyframes and no SAM 3 fine-tuning it does not
+reproduce the paper's models, whose predictions the quick demo replays. Evaluation
+GT is opened only after the predictions are complete. On an RTX 5090 the run took
+about 6 min (14.5 s for SAM 3 and 340 s for the DINOv2 decoder) with a peak of
+8.0 GiB of allocated GPU memory; allow at least 16 GB. Trained weights and
+temporary features stay in the work directory.
 
 ## Run on your own sequences
 
